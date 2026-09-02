@@ -1,0 +1,384 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uptime Pulse | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #090d16;
+            --surface: rgba(18, 24, 38, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #131b2e 0%, #090d16 60%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1050px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+            header h1 {
+                font-size: 26px;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--success);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+            .stat-card p {
+                font-size: 13px;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+
+            .stat-card h2 {
+                font-size: 28px;
+                font-weight: 700;
+            }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-main);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        input {
+            flex: 1;
+            min-width: 220px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: white;
+            outline: none;
+            transition: 0.2s;
+            font-size: 14px;
+        }
+
+            input:focus {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+            }
+
+        button.btn-primary {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+            button.btn-primary:hover {
+                background: #0369a1;
+                transform: translateY(-1px);
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 14px 16px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-up {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-down {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-pending {
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .btn-delete {
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.2s;
+        }
+
+            .btn-delete:hover {
+                background: var(--danger);
+                color: white;
+            }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span class="pulse-dot"></span> Uptime Monitor Dashboard</h1>
+            <span style="font-size: 13px; color: var(--text-muted);">Otomatik kontrol: 10 sn</span>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <p>Toplam İzlenen</p>
+                <h2 id="totalSites">0</h2>
+            </div>
+            <div class="stat-card">
+                <p>Çalışır Durumda</p>
+                <h2 id="upSites" style="color: var(--success);">0</h2>
+            </div>
+            <div class="stat-card">
+                <p>Erişilemeyen</p>
+                <h2 id="downSites" style="color: var(--danger);">0</h2>
+            </div>
+            <div class="stat-card">
+                <p>Ort. Yanıt Süresi</p>
+                <h2 id="avgResponse">0 ms</h2>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Yeni İzleme Hedefi Ekle</div>
+            <div class="input-group">
+                <input type="text" id="siteName" placeholder="Site Adı (örn. Google Türkiye)">
+                <input type="url" id="siteUrl" placeholder="URL (örn. https://www.google.com)">
+                <button class="btn-primary" onclick="addSite()">Takibe Al</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Canlı Servis Durumları</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Servis</th>
+                        <th>URL</th>
+                        <th>Durum</th>
+                        <th>Yanıt Süresi</th>
+                        <th>HTTP Kodu</th>
+                        <th style="text-align: right;">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody id="targetTableBody">
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Yükleniyor...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function fetchTargets() {
+            try {
+                const response = await fetch('/targets');
+                const targets = await response.json();
+                const tbody = document.getElementById('targetTableBody');
+
+                let upCount = 0;
+                let downCount = 0;
+                let totalResponseTime = 0;
+                let validChecks = 0;
+
+                tbody.innerHTML = '';
+
+                if (targets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">Henüz eklenmiş bir servis yok.</td></tr>';
+                    updateStats(0, 0, 0, 0);
+                    return;
+                }
+
+                targets.forEach(t => {
+                    const lastCheck = t.checks && t.checks.length > 0 ? t.checks[t.checks.length - 1] : null;
+
+                    let badge = '<span class="badge badge-pending">BEKLİYOR</span>';
+                    let time = '-';
+                    let code = '-';
+
+                    if (lastCheck) {
+                        if (lastCheck.is_up) {
+                            badge = '<span class="badge badge-up">● AYAKTA</span>';
+                            upCount++;
+                        } else {
+                            badge = '<span class="badge badge-down">● ERİŞİLEMİYOR</span>';
+                            downCount++;
+                        }
+
+                        if (lastCheck.response_time_ms) {
+                            time = `${lastCheck.response_time_ms} ms`;
+                            totalResponseTime += lastCheck.response_time_ms;
+                            validChecks++;
+                        }
+
+                        code = lastCheck.status_code || lastCheck.error_message || 'Hata';
+                    }
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                            <td><strong>${t.name}</strong></td>
+                            <td><a href="${t.url}" target="_blank" style="color: var(--accent); text-decoration: none;">${t.url}</a></td>
+                            <td>${badge}</td>
+                            <td>${time}</td>
+                            <td><code>${code}</code></td>
+                            <td style="text-align: right;">
+                                <button class="btn-delete" onclick="deleteTarget(${t.id})">Sil</button>
+                            </td>
+                        `;
+                    tbody.appendChild(row);
+                });
+
+                const avgTime = validChecks > 0 ? Math.round(totalResponseTime / validChecks) : 0;
+                updateStats(targets.length, upCount, downCount, avgTime);
+
+            } catch (err) {
+                console.error('Veri çekme hatası:', err);
+            }
+        }
+
+        function updateStats(total, up, down, avg) {
+            document.getElementById('totalSites').innerText = total;
+            document.getElementById('upSites').innerText = up;
+            document.getElementById('downSites').innerText = down;
+            document.getElementById('avgResponse').innerText = `${avg} ms`;
+        }
+
+        async function addSite() {
+            const name = document.getElementById('siteName').value.trim();
+            const url = document.getElementById('siteUrl').value.trim();
+
+            if (!name || !url) {
+                alert('Lütfen hem site adı hem de URL alanlarını doldurun.');
+                return;
+            }
+
+            const response = await fetch('/targets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, url })
+            });
+
+            if (response.ok) {
+                document.getElementById('siteName').value = '';
+                document.getElementById('siteUrl').value = '';
+                fetchTargets();
+            } else {
+                const err = await response.json();
+                alert(err.detail || 'Eklenirken bir hata oluştu');
+            }
+        }
+
+        async function deleteTarget(id) {
+            if (!confirm('Bu servisi takipten çıkarmak istediğinize emin misiniz?')) return;
+
+            const response = await fetch(`/targets/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                fetchTargets();
+            }
+        }
+
+        fetchTargets();
+        setInterval(fetchTargets, 10000);
+    </script>
+</body>
+</html>

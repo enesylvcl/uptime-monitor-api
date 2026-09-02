@@ -1,0 +1,32 @@
+# -*- coding: utf-8 -*-
+# Veritabanı motorunu, temel model sınıfını ve oturum oluşturucuyu içe aktarıyoruz
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+# SQLite veritabanı dosyamızın konumu (aynı klasörde uptime.db adında bir dosya oluşturur)
+SQLALCHEMY_DATABASE_URL = "sqlite:///./uptime.db"
+
+# Veritabanı motorunu (engine) kuruyoruz:
+# check_same_thread: False -> SQLite varsayılan olarak tek iş parçacığıyla (thread) çalışır.
+# FastAPI ile arka plandaki zamanlayıcı aynı anda erişebilsin diye bu kısıtlamayı kaldırıyoruz.
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+
+# Her işlem için bir oturum açacak fabrika nesnesi:
+# autocommit=False -> Veritabanı işlemlerini biz "db.commit()" demeden otomatik kaydetmez.
+# autoflush=False -> Sorgu yaparken hafızadaki nesneleri zorla veritabanına göndermez.
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Tablo modellerimizin miras alacağı temel (Base) sınıf.
+Base = declarative_base()
+
+# FastAPI endpoint'lerinde Dependency Injection (bağımlılık enjeksiyonu) olarak kullanacağımız fonksiyon.
+# Her gelen istekte temiz bir veritabanı oturumu açar ve işlem bitince kapatır.
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db  # Oturumu isteği işleyen fonksiyona teslim eder
+    finally:
+        db.close()  # İstek başarılı da olsa, hata da çıksa bağlantıyı kapatır (bellek sızıntısını önler)

@@ -1,0 +1,80 @@
+# -*- coding: utf-8 -*-
+# Ağ istekleri atmak ve süreyi ölçmek için gerekli kütüphaneler
+import requests
+import time
+from database import SessionLocal
+import models
+
+def run_all_checks():
+    """
+    Veritabanındaki tüm siteleri gezer, HTTP GET isteği atar,
+    yanıt süresini hesaplar ve sonucu check_results tablosuna kaydeder.
+    """
+    # Scheduler arka planda ayrı bir iş parçacığında (thread) çalıştığı için kendi veritabanı oturumunu açar
+    db = SessionLocal()
+    try:
+        # Veritabanında kayıtlı izlenecek tüm siteleri al
+        targets = db.query(models.Target).all()
+        if not targets:
+            print("[Scheduler] Takip edilecek hedef bulunamadi.")
+            return
+
+        print(f"\n[Scheduler] Toplam {len(targets)} hedef kontrol ediliyor...")
+
+        # Her site için sırayla istek atma döngüsü
+        for target in targets:
+            start_time = time.time()  # İstek gitmeden hemen önceki zaman damgası
+            try:
+                # Siteye HTTP GET isteği gönderiyoruz. 5 saniye içinde cevap gelmezse Timeout hatası fırlatır.
+                response = requests.get(target.url, timeout=5)
+                # Geçen süreyi milisaniyeye çevirip virgülden sonra 2 basamağa yuvarlıyoruz
+                duration = round((time.time() - start_time) * 1000, 2)
+                
+                # HTTP kodu 200-399 arasındaysa site başarılıdır (True), 400 ve 500'ler ise çökmüştür (False)
+                is_up = response.ok
+
+                # Başarılı ölçüm sonucunu veritabanı modeli olarak oluşturuyoruz
+                result = models.CheckResult(
+                    target_id=target.id,
+                    status_code=response.status_code,
+                    response_time_ms=duration,
+                    is_up=is_up,
+                    error_message=None
+                )
+                status_txt = "UP" if is_up else "DOWN"
+                print(f" -> {target.name} ({target.url}): {status_txt} | {response.status_code} | {duration}ms")
+
+            except requests.exceptions.Timeout:
+                # Site 5 saniye içinde cevap veremezse buraya düşer
+                duration = round((time.time() - start_time) * 1000, 2)
+                result = models.CheckResult(
+                    target_id=target.id,
+                    status_code=None,
+                    response_time_ms=duration,
+                    is_up=False,
+                    error_message="Timeout"
+                )
+                print(f" -> {target.name}: DOWN (Timeout)")
+
+            except requests.exceptions.RequestException as e:
+                # Hatalı URL, DNS bulunamadı veya bağlantı koptu gibi ağ hatalarında buraya düşer
+                duration = round((time.time() - start_time) * 1000, 2)
+                result = models.CheckResult(
+                    target_id=target.id,
+                    status_code=None,
+                    response_time_ms=duration,
+                    is_up=False,
+                    error_message=str(e)
+                )
+                print(f" -> {target.name}: DOWN ({type(e).__name__})")
+
+            # Ölçüm sonucunu ekleme listesine alıyoruz
+            db.add(result)
+
+        # Tüm siteler bittiğinde sonuçları tek bir işlemle veritabanına kalıcı olarak kaydediyoruz
+        db.commit()
+        print("[Scheduler] Kontroller tamamlandi ve sonuclar kaydedildi.\n")
+        
+    finally:
+        # Oturumu kapatıyoruz ki bağlantı veritabanında askıda kalmasın
+        db.close()

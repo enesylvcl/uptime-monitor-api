@@ -1,0 +1,92 @@
+# -*- coding: utf-8 -*-
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
+from apscheduler.schedulers.background import BackgroundScheduler
+import contextlib
+
+# Kendi yazdığımız modülleri projeye dahil ediyoruz
+import models
+import schemas
+from database import engine, get_db
+from checker import run_all_checks
+
+# Veritabanında tablolar (targets ve check_results) henüz yoksa otomatik olarak oluşturur
+models.Base.metadata.create_all(bind=engine)
+
+# FastAPI Yaşam Döngüsü (Lifespan Context Manager):
+# Sunucu ilk ayağa kalktığında ve kapatıldığında çalışacak mantığı yönetir.
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. Sunucu başladığında arka plan zamanlayıcısını kur
+    scheduler = BackgroundScheduler()
+    # Her 30 saniyede bir run_all_checks fonksiyonunu arka planda tetikle
+    scheduler.add_job(run_all_checks, "interval", seconds=30)
+    scheduler.start()
+    print("[Lifespan] Arka plan zamanlayicisi (APScheduler) baslatildi.")
+    
+    # Sunucu açılır açılmaz ilk kontrolü 30 saniye beklemeden hemen 1 kere çalıştır
+    run_all_checks()
+    
+    yield  # Sunucu çalıştığı sürece uygulama burada bekler ve gelen HTTP isteklerine cevap verir
+    
+    # 2. Sunucu durdurulduğunda scheduler'ı arkada açık bırakmamak için güvenle kapat
+    scheduler.shutdown()
+    print("[Lifespan] Arka plan zamanlayicisi durduruldu.")
+
+# Uygulamayı lifespan ayarıyla başlatıyoruz
+app = FastAPI(title="Uptime Monitor API", lifespan=lifespan)
+
+
+# 1. Yeni Takip Edilecek Site Ekle (POST /targets)
+@app.post("/targets", response_model=schemas.TargetResponse)
+def create_target(target: schemas.TargetCreate, db: Session = Depends(get_db)):
+    # Bu URL daha önceden veritabanına eklenmiş mi kontrol et
+    db_target = db.query(models.Target).filter(models.Target.url == target.url).first()
+    if db_target:
+        # Eklenmişse mükerrer kayıt yapma, istemciye 400 Bad Request hatası fırlat
+        raise HTTPException(status_code=400, detail="Bu URL zaten takip listesinde ekli!")
+    
+    # Eklenmemişse yeni siteyi veritabanına kaydet
+    new_target = models.Target(name=target.name, url=target.url)
+    db.add(new_target)
+    db.commit()
+    db.refresh(new_target)  # Otomatik oluşan id bilgisini nesneye geri yükler
+    return new_target
+
+
+# 2. Takip Edilen Tüm Siteleri Listele (GET /targets)
+@app.get("/targets", response_model=List[schemas.TargetResponse])
+def get_targets(db: Session = Depends(get_db)):
+    # Veritabanındaki tüm siteleri ve altlarındaki geçmiş test sonuçlarını liste olarak döner
+    return db.query(models.Target).all()
+
+
+# 3. Belirli Bir Sitenin Detayını Getir (GET /targets/{target_id})
+@app.get("/targets/{target_id}", response_model=schemas.TargetResponse)
+def get_target(target_id: int, db: Session = Depends(get_db)):
+    # Verilen ID'ye sahip siteyi bul
+    target = db.query(models.Target).filter(models.Target.id == target_id).first()
+    if not target:
+        # Bulunamazsa 404 Not Found dön
+        raise HTTPException(status_code=404, detail="Hedef site bulunamadi!")
+    return target
+
+
+# 4. Ana Karşılama Endpoint'i (GET /)
+@app.get("/")
+def read_root():
+    return {"message": "Uptime Monitor API Calisiyor. Dokumantasyon icin /docs adresine gidin."}
+
+
+# 5. Son Atılan Ping Sonuçlarını Listele (GET /checks)
+@app.get("/checks", response_model=List[schemas.CheckResultResponse])
+def get_latest_checks(limit: int = 50, db: Session = Depends(get_db)):
+    # Yapılan son ölçüm sonuçlarını en yeniden eskiye doğru sıralayıp (timestamp.desc()) limit kadarını getirir
+    results = (
+        db.query(models.CheckResult)
+        .order_by(models.CheckResult.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return results

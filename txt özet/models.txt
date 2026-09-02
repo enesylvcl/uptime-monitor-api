@@ -1,0 +1,40 @@
+# -*- coding: utf-8 -*-
+# Tablo sütun tiplerini, SQL fonksiyonlarını ve tablo ilişkilerini içe aktarıyoruz
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from database import Base
+
+# 1. Takip Edilen Siteler Tablosu (targets)
+class Target(Base):
+    __tablename__ = "targets"  # Veritabanındaki tablonun fiziksel adı
+
+    id = Column(Integer, primary_key=True, index=True)  # Her sitenin benzersiz kimlik numarası (1, 2, 3...)
+    name = Column(String, index=True)                   # Sitenin takma adı (Örn: "Google")
+    url = Column(String, unique=True, index=True)       # Sitenin adresi; unique=True sayesinde aynı URL 2 kez eklenemez
+
+    # Bire-Çok (One-to-Many) İlişki:
+    # 1 sitenin birden çok kontrol sonucu olabilir.
+    # Python içinde "target.checks" yazdığımızda o sitenin tüm geçmiş ölçümlerini bir liste olarak getirir.
+    checks = relationship("CheckResult", back_populates="target")
+
+
+# 2. Kontrol Sonuçları Tablosu (check_results)
+class CheckResult(Base):
+    __tablename__ = "check_results"  # Kontrol sonuçlarının tutulduğu tablonun adı
+
+    id = Column(Integer, primary_key=True, index=True)  # Ölçüm kaydının benzersiz ID'si
+    
+    # Yabancı Anahtar (Foreign Key): Bu ölçümün hangi siteye ait olduğunu targets tablosundaki id ile eşleştirir.
+    target_id = Column(Integer, ForeignKey("targets.id"), index=True)
+    
+    # Ölçümün yapıldığı tarih ve saati sunucunun anlık saatinden otomatik olarak yazar
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    
+    status_code = Column(Integer, nullable=True)        # Siteden dönen HTTP durum kodu (200, 404, 500 vb. Çöktüyse None kalabilir)
+    response_time_ms = Column(Float, nullable=True)     # Sitenin yanıt verme süresi (milisaniye cinsinden)
+    is_up = Column(Boolean, default=False)              # Site erişilebilir mi? (True: Ayakta, False: Çöktü)
+    error_message = Column(String, nullable=True)       # Çökme yaşandıysa oluşan hata metni (Timeout, Connection Refused vb.)
+
+    # Ters ilişki: "check_result.target" dendiğinde bu sonucun ait olduğu Target nesnesini verir.
+    target = relationship("Target", back_populates="checks")
