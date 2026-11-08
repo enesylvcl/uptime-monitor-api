@@ -1,49 +1,32 @@
 # -*- coding: utf-8 -*-
+# Veritabani motorunu, temel model sinifini ve oturum olusturucuyu iceri aktariyoruz
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# PostgreSQL baglanti adresi (kullanici:sifre@sunucu:port/veritabani_adi)
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:123456@localhost:5432/uptimedb"
-
-# Veritabani ile konusacak motor (Engine)
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
-# Veritabani islemlerini yurutecek oturum yoneticisi (Session)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Tablo modellerimizin temel alacagi Base sinifi
-Base = declarative_base()
-# -*- coding: utf-8 -*-
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-# Yerel SQLite veritabani dosyasi (Sifir kurulum gerektirir)
+# SQLite veritabani dosyamizin konumu (ayni klasorde uptime.db adinda bir dosya olusturur, kurulum gerektirmez)
 SQLALCHEMY_DATABASE_URL = "sqlite:///./uptime.db"
 
-# SQLite coklu is parcacigi ayari
+# Veritabani motorunu (engine) kuruyoruz:
+# check_same_thread: False -> SQLite varsayilan olarak tek is parcacigiyla (thread) calisir.
+# FastAPI istekleri ile arka plandaki zamanlayici ayri thread'lerde erissin diye bu kisitlamayi kaldiriyoruz.
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 
-# Veritabani islemlerini yurutecek oturum yoneticisi (Session)
+# Her islem icin bir oturum acacak fabrika nesnesi:
+# autocommit=False -> Biz "db.commit()" demeden degisiklikleri kalici olarak kaydetmez.
+# autoflush=False -> Sorgu yaparken hafizadaki nesneleri kendiliginden veritabanina gondermez.
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Tablo modellerimizin temel alacagi Base sinifi
+# Tablo modellerimizin miras alacagi temel (Base) sinif
 Base = declarative_base()
 
-# Veritabani oturumu acip isi bitince kapatan yardimci fonksiyon
+
+# FastAPI endpoint'lerinde Dependency Injection (bagimlilik enjeksiyonu) olarak kullandigimiz fonksiyon.
+# Her gelen istekte yeni bir veritabani oturumu acar ve istek bitince kapatir.
 def get_db():
     db = SessionLocal()
     try:
-        yield db
+        yield db  # Oturumu istegi isleyen endpoint fonksiyonuna teslim eder
     finally:
-        db.close()
-# Veritabani oturumu acip isi bitince kapatan yardimci fonksiyon
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+        db.close()  # Istek basarili da olsa hata da olsa baglantiyi kapatir

@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c6dd2530-07fb-48cf-9f05-917f883d6d68</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>checker.py</StartupFile>
+    <StartupFile>main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

@@ -6,65 +6,97 @@ from typing import List
 from apscheduler.schedulers.background import BackgroundScheduler
 import contextlib
 
+# Kendi yazdigimiz modulleri projeye dahil ediyoruz
 import models
 import schemas
 from database import engine, get_db
 from checker import run_all_checks
 
+# Veritabaninda tablolar (targets ve check_results) yoksa otomatik olusturur
 models.Base.metadata.create_all(bind=engine)
 
+
+# FastAPI yasam dongusu (lifespan): sunucu acilirken ve kapanirken calisacak kodu yonetir
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Sunucu baslarken arka plan zamanlayicisini kur
     scheduler = BackgroundScheduler()
+    # Her 30 saniyede bir run_all_checks fonksiyonunu arka planda calistir
     scheduler.add_job(run_all_checks, "interval", seconds=30)
     scheduler.start()
     print("[Lifespan] APScheduler baslatildi.")
+
+    # Ilk kontrolu 30 saniye beklemeden, sunucu acilir acilmaz bir kez calistir
     run_all_checks()
-    yield
+
+    yield  # Sunucu calistigi surece burada bekler ve gelen HTTP isteklerine cevap verir
+
+    # 2. Sunucu durdurulurken zamanlayiciyi kapat
     scheduler.shutdown()
     print("[Lifespan] APScheduler durduruldu.")
 
+
+# Uygulamayi lifespan ayariyla olusturuyoruz
 app = FastAPI(title="Uptime Monitor API", lifespan=lifespan)
 
+
+# Dashboard sayfasini (index.html) dondurur (GET /dashboard)
 @app.get("/dashboard")
 def get_dashboard():
     return FileResponse("index.html")
 
+
+# Yeni takip edilecek site ekler (POST /targets)
 @app.post("/targets", response_model=schemas.TargetResponse)
 def create_target(target: schemas.TargetCreate, db: Session = Depends(get_db)):
+    # Bu URL daha once eklenmis mi kontrol et
     db_target = db.query(models.Target).filter(models.Target.url == target.url).first()
     if db_target:
+        # Eklenmisse tekrar kaydetme, 400 Bad Request don
         raise HTTPException(status_code=400, detail="Bu URL zaten ekli!")
+    # Eklenmemisse yeni siteyi veritabanina kaydet
     new_target = models.Target(name=target.name, url=target.url)
     db.add(new_target)
     db.commit()
-    db.refresh(new_target)
+    db.refresh(new_target)  # Veritabaninin atadigi id bilgisini nesneye geri yukler
     return new_target
 
+
+# Takip edilen tum siteleri, gecmis kontrol sonuclariyla birlikte listeler (GET /targets)
 @app.get("/targets", response_model=List[schemas.TargetResponse])
 def get_targets(db: Session = Depends(get_db)):
     return db.query(models.Target).all()
 
+
+# Belirli bir sitenin detayini getirir (GET /targets/{target_id})
 @app.get("/targets/{target_id}", response_model=schemas.TargetResponse)
 def get_target(target_id: int, db: Session = Depends(get_db)):
     target = db.query(models.Target).filter(models.Target.id == target_id).first()
     if not target:
+        # Bulunamazsa 404 Not Found don
         raise HTTPException(status_code=404, detail="Hedef bulunamadi!")
     return target
 
+
+# API'nin calistigini gosteren basit karsilama (GET /)
 @app.get("/")
 def read_root():
     return {"message": "Uptime Monitor API Aktif."}
 
+
+# Son kontrol sonuclarini en yeniden eskiye siralayip "limit" kadarini getirir (GET /checks)
 @app.get("/checks", response_model=List[schemas.CheckResultResponse])
 def get_latest_checks(limit: int = 50, db: Session = Depends(get_db)):
     return db.query(models.CheckResult).order_by(models.CheckResult.timestamp.desc()).limit(limit).all()
 
+
+# Bir siteyi ve ona ait tum kontrol sonuclarini siler (DELETE /targets/{target_id})
 @app.delete("/targets/{target_id}")
 def delete_target(target_id: int, db: Session = Depends(get_db)):
     target = db.query(models.Target).filter(models.Target.id == target_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Hedef bulunamadi")
+    # Once siteye bagli kontrol sonuclarini, sonra sitenin kendisini sil
     db.query(models.CheckResult).filter(models.CheckResult.target_id == target_id).delete()
     db.delete(target)
     db.commit()
