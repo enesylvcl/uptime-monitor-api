@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -49,6 +49,9 @@ def get_dashboard():
 # Yeni takip edilecek site ekler (POST /targets)
 @app.post("/targets", response_model=schemas.TargetResponse)
 def create_target(target: schemas.TargetCreate, db: Session = Depends(get_db)):
+    # URL http:// veya https:// ile baslamiyorsa gecersiz say, 400 Bad Request don
+    if not target.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="URL http:// veya https:// ile baslamali!")
     # Bu URL daha once eklenmis mi kontrol et
     db_target = db.query(models.Target).filter(models.Target.url == target.url).first()
     if db_target:

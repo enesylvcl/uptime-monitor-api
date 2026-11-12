@@ -58,7 +58,7 @@ uptime-monitor-api/
 | Metot | Yol | Açıklama |
 |---|---|---|
 | GET | `/` | API'nin çalıştığını gösteren mesaj |
-| POST | `/targets` | Yeni site ekler. Gövde: `{"name": "...", "url": "..."}`. URL zaten varsa `400` döner |
+| POST | `/targets` | Yeni site ekler. Gövde: `{"name": "...", "url": "..."}`. URL `http://` veya `https://` ile başlamıyorsa ya da zaten ekliyse `400` döner |
 | GET | `/targets` | Tüm siteleri, geçmiş kontrol sonuçlarıyla birlikte listeler |
 | GET | `/targets/{id}` | Tek bir sitenin detayını getirir; yoksa `404` döner |
 | DELETE | `/targets/{id}` | Siteyi ve ona ait tüm kontrol sonuçlarını siler; yoksa `404` döner |
