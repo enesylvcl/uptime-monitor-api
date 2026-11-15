@@ -2,6 +2,18 @@
 
 Kayıtlı web sitelerinin **erişilebilir olup olmadığını periyodik olarak kontrol eden** bir REST API. Arka planda çalışan bir zamanlayıcı her 30 saniyede bir tüm sitelere HTTP isteği atar; sonucu (durum kodu, yanıt süresi, ayakta mı / erişilemiyor mu) veritabanına kaydeder. Sonuçlar API üzerinden ve basit bir web dashboard'u üzerinden görüntülenebilir.
 
+## Mimari
+
+![Uptime Monitor mimarisi](docs/mimari.png)
+
+Sistemde aynı anda iki iş parçacığı (thread) çalışır:
+- **API (FastAPI):** Kullanıcı ya da dashboard istek attığında çalışır; site ekler, listeler, siler.
+- **Zamanlayıcı (APScheduler):** Kimse istemeden her 30 saniyede bir `checker.py` ile tüm siteleri kontrol eder ve sonucu kaydeder.
+
+İkisi aynı SQLite veritabanını kullandığı için `database.py` içinde `check_same_thread=False` ayarı kullanılır.
+
+> Şemanın düzenlenebilir hali: [`docs/mimari.excalidraw`](docs/mimari.excalidraw) ([excalidraw.com](https://excalidraw.com) üzerinde açılabilir).
+
 ## Kullanılan Teknolojiler
 
 - **FastAPI** – REST API ve endpoint'ler
@@ -23,6 +35,7 @@ uptime-monitor-api/
 ├── schemas.py                 # Pydantic şemaları (API giriş/çıkış formatları)
 ├── index.html                 # Dashboard arayüzü (GET /dashboard ile sunulur)
 ├── requirements.txt           # Python bağımlılıkları
+├── docs/                      # Mimari ve veritabanı şemaları (PNG + .excalidraw)
 ├── uptime-monitor-api.sln     # Visual Studio çözüm dosyası
 ├── uptime-monitor-api.pyproj  # Visual Studio Python proje dosyası
 ├── .gitignore
@@ -30,6 +43,8 @@ uptime-monitor-api/
 ```
 
 ## Veritabanı Tabloları
+
+![Veritabanı şeması](docs/veritabani.png)
 
 **`targets`** – Takip edilen siteler
 
